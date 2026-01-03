@@ -1,12 +1,14 @@
-FROM node:20-alpine
+FROM node:20-slim
 
 # Install dependencies for better-sqlite3 and Tesseract
-RUN apk add --no-cache \
+# We use Debian instead of Alpine to avoid musl libc issues (fcntl64)
+RUN apt-get update && apt-get install -y \
     python3 \
     make \
     g++ \
     tesseract-ocr \
-    tesseract-ocr-data-eng
+    tesseract-ocr-eng \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
