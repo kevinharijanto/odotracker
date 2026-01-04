@@ -16,13 +16,16 @@ function getMainMenuKeyboard() {
         ],
         [
             Markup.button.callback('🔧 Record Service', 'menu_service'),
-            Markup.button.callback('📜 History', 'menu_history')
+            Markup.button.callback('⛽ Log Fuel', 'menu_fuel')
         ],
         [
-            Markup.button.callback('⏰ Reminders', 'menu_reminders'),
-            Markup.button.callback('⚙️ Settings', 'menu_settings')
+            Markup.button.callback('📜 History', 'menu_history'),
+            Markup.button.callback('⏰ Reminders', 'menu_reminders')
         ],
-        [Markup.button.callback('❓ Help', 'menu_help')]
+        [
+            Markup.button.callback('⚙️ Settings', 'menu_settings'),
+            Markup.button.callback('❓ Help', 'menu_help')
+        ]
     ]);
 }
 
@@ -169,6 +172,10 @@ function registerStatusHandlers(bot) {
             `*Service:*\n` +
             `/service - Record service event\n` +
             `/servicehistory - View history\n\n` +
+            `*Fuel:*\n` +
+            `/fuel - Log fuel refill\n` +
+            `/fuelhistory - Fuel history\n` +
+            `/fuelstats - Efficiency by brand\n\n` +
             `*Other:*\n` +
             `/status - Vehicle status\n` +
             `/reminders - View/Add reminders\n` +
@@ -306,6 +313,70 @@ function registerStatusHandlers(bot) {
                     ]),
                     [Markup.button.callback('« Back to Menu', 'back_to_menu')]
                 ])
+            }
+        );
+    });
+
+    bot.action('menu_fuel', async (ctx) => {
+        await ctx.answerCbQuery();
+        const user = db.getOrCreateUser(
+            ctx.from.id.toString(),
+            ctx.from.username,
+            ctx.from.first_name
+        );
+
+        const vehicles = db.getVehiclesByUser(user.id);
+
+        if (vehicles.length === 0) {
+            await ctx.editMessageText(
+                '🚗 You need to add a vehicle first!',
+                {
+                    parse_mode: 'Markdown',
+                    ...Markup.inlineKeyboard([
+                        [Markup.button.callback('➕ Add Vehicle', 'menu_addvehicle')],
+                        [Markup.button.callback('« Back to Menu', 'back_to_menu')]
+                    ])
+                }
+            );
+            return;
+        }
+
+        const buttons = vehicles.map(v => {
+            const icon = v.vehicle_type === 'motorcycle' ? '🏍️' : '🚗';
+            return [Markup.button.callback(`${icon} ${v.name} (${v.current_odo.toLocaleString()} km)`, `fuel_vehicle_${v.id}`)];
+        });
+        buttons.push([Markup.button.callback('📊 Fuel Stats', 'menu_fuelstats')]);
+        buttons.push([Markup.button.callback('« Back to Menu', 'back_to_menu')]);
+
+        await ctx.editMessageText(
+            '⛽ *Log Fuel Refill*\n\nSelect a vehicle:',
+            {
+                parse_mode: 'Markdown',
+                ...Markup.inlineKeyboard(buttons)
+            }
+        );
+    });
+
+    bot.action('menu_fuelstats', async (ctx) => {
+        await ctx.answerCbQuery();
+        const user = db.getOrCreateUser(
+            ctx.from.id.toString(),
+            ctx.from.username,
+            ctx.from.first_name
+        );
+
+        const vehicles = db.getVehiclesByUser(user.id);
+        const buttons = vehicles.map(v => {
+            const icon = v.vehicle_type === 'motorcycle' ? '🏍️' : '🚗';
+            return [Markup.button.callback(`${icon} ${v.name}`, `fuelstats_${v.id}`)];
+        });
+        buttons.push([Markup.button.callback('« Back', 'menu_fuel')]);
+
+        await ctx.editMessageText(
+            '📊 *Fuel Stats*\n\nSelect a vehicle:',
+            {
+                parse_mode: 'Markdown',
+                ...Markup.inlineKeyboard(buttons)
             }
         );
     });
@@ -541,6 +612,8 @@ function registerStatusHandlers(bot) {
             `/addvehicle - Add vehicle\n` +
             `/logodo - Log odometer\n` +
             `/service - Record service\n` +
+            `/fuel - Log fuel refill\n` +
+            `/fuelstats - Fuel efficiency\n` +
             `/history - Odometer history\n` +
             `/servicehistory - Service history\n` +
             `/reminders - Manage reminders\n` +
