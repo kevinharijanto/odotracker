@@ -90,3 +90,19 @@ CREATE TABLE IF NOT EXISTS access_requests (
 
 CREATE INDEX IF NOT EXISTS idx_allowed_users_telegram ON allowed_users(telegram_id);
 CREATE INDEX IF NOT EXISTS idx_access_requests_telegram ON access_requests(telegram_id);
+
+-- Fuel logs for tracking refueling and efficiency
+CREATE TABLE IF NOT EXISTS fuel_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vehicle_id INTEGER NOT NULL,
+    odo_km INTEGER NOT NULL,
+    liters REAL NOT NULL,
+    fuel_brand TEXT NOT NULL,
+    fuel_type TEXT,
+    cost INTEGER,
+    km_per_liter REAL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(vehicle_id) REFERENCES vehicles(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_fuel_logs_vehicle ON fuel_logs(vehicle_id);

@@ -225,9 +225,72 @@ async function syncVehicle(vehicle, user) {
     }
 }
 
+/**
+ * Append a fuel entry to a Fuel sheet
+ */
+async function logFuelEntry(vehicle, odoKm, liters, fuelBrand, cost, kmPerLiter) {
+    if (!sheetsApi) return;
+
+    try {
+        // Ensure Fuel sheet exists
+        const response = await sheetsApi.spreadsheets.get({
+            spreadsheetId,
+            fields: 'sheets.properties.title'
+        });
+
+        const existingSheets = response.data.sheets.map(s => s.properties.title);
+
+        if (!existingSheets.includes('Fuel')) {
+            await sheetsApi.spreadsheets.batchUpdate({
+                spreadsheetId,
+                requestBody: {
+                    requests: [{
+                        addSheet: {
+                            properties: { title: 'Fuel' }
+                        }
+                    }]
+                }
+            });
+
+            // Add headers
+            await sheetsApi.spreadsheets.values.update({
+                spreadsheetId,
+                range: 'Fuel!A1',
+                valueInputOption: 'RAW',
+                requestBody: {
+                    values: [['Date', 'Vehicle', 'Plate', 'Odometer (km)', 'Liters', 'Brand', 'Cost (Rp)', 'km/L']]
+                }
+            });
+        }
+
+        const date = new Date().toLocaleString('id-ID');
+        const row = [
+            date,
+            vehicle.name,
+            vehicle.plate || '',
+            odoKm,
+            liters,
+            fuelBrand,
+            cost || '',
+            kmPerLiter || ''
+        ];
+
+        await sheetsApi.spreadsheets.values.append({
+            spreadsheetId,
+            range: 'Fuel!A:H',
+            valueInputOption: 'RAW',
+            insertDataOption: 'INSERT_ROWS',
+            requestBody: { values: [row] }
+        });
+    } catch (error) {
+        console.error('Error syncing fuel to Sheets:', error.message);
+    }
+}
+
 module.exports = {
     initSheets,
     syncReading,
     syncService,
-    syncVehicle
+    syncVehicle,
+    logFuelEntry
 };

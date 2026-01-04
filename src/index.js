@@ -11,6 +11,7 @@ const { registerOdometerHandlers, handleOdometerTextInput } = require('./handler
 const { registerServiceHandlers, handleServiceTextInput } = require('./handlers/serviceHandlers');
 const { registerStatusHandlers, handleStatusTextInput } = require('./handlers/statusHandlers');
 const { registerReminderHandlers } = require('./handlers/reminderHandlers');
+const { registerFuelHandlers, handleFuelTextInput } = require('./handlers/fuelHandlers');
 const { registerAdminHandlers, handleAdminTextInput, logAccessRequest, registerQuickAddHandler, isAdmin } = require('./handlers/adminHandlers');
 
 // Validate environment
@@ -73,6 +74,7 @@ registerVehicleHandlers(bot);
 registerOdometerHandlers(bot);
 registerServiceHandlers(bot);
 registerReminderHandlers(bot);
+registerFuelHandlers(bot);
 
 // Handle text messages (for multi-step inputs)
 bot.on('text', async (ctx) => {
@@ -93,6 +95,7 @@ bot.on('text', async (ctx) => {
     if (await handleVehicleTextInput(ctx, session)) return;
     if (await handleOdometerTextInput(ctx, session)) return;
     if (await handleServiceTextInput(ctx, session)) return;
+    if (await handleFuelTextInput(ctx, session)) return;
     if (await handleStatusTextInput(ctx, session)) return;
 
     // If nothing handled it and it's not a command, show help hint
@@ -146,6 +149,8 @@ async function main() {
         { command: 'logodo', description: '📍 Log odometer manually' },
         { command: 'reminders', description: '⏰ View reminders' },
         { command: 'addreminder', description: '➕ Add reminder' },
+        { command: 'fuel', description: '⛽ Log fuel refill' },
+        { command: 'fuelstats', description: '📊 Fuel efficiency stats' },
         { command: 'status', description: '📊 Vehicle status' },
         { command: 'history', description: '📜 Odometer history' },
         { command: 'servicehistory', description: '🔧 Service history' },

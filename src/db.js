@@ -551,6 +551,96 @@ function getAdminStats() {
     };
 }
 
+// ===================== FUEL LOGS =====================
+
+/**
+ * Get the last fuel log for a vehicle (to calculate km since last refuel)
+ */
+function getLastFuelLog(vehicleId) {
+    return db.prepare(`
+        SELECT * FROM fuel_logs 
+        WHERE vehicle_id = ? 
+        ORDER BY created_at DESC 
+        LIMIT 1
+    `).get(vehicleId);
+}
+
+/**
+ * Add a fuel log entry
+ */
+function addFuelLog(vehicleId, odoKm, liters, fuelBrand, fuelType = null, cost = null) {
+    // Calculate km/liter based on last refuel
+    const lastFuel = getLastFuelLog(vehicleId);
+    let kmPerLiter = null;
+
+    if (lastFuel && odoKm > lastFuel.odo_km) {
+        const kmDriven = odoKm - lastFuel.odo_km;
+        kmPerLiter = Math.round((kmDriven / liters) * 100) / 100; // 2 decimal places
+    }
+
+    const stmt = db.prepare(`
+        INSERT INTO fuel_logs (vehicle_id, odo_km, liters, fuel_brand, fuel_type, cost, km_per_liter)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    const result = stmt.run(vehicleId, odoKm, liters, fuelBrand, fuelType, cost, kmPerLiter);
+
+    // Also update vehicle's current odometer if this reading is higher
+    const vehicle = getVehicleById(vehicleId);
+    if (vehicle && odoKm > vehicle.current_odo) {
+        updateVehicleOdo(vehicleId, odoKm);
+    }
+
+    return {
+        id: result.lastInsertRowid,
+        kmPerLiter
+    };
+}
+
+/**
+ * Get fuel history for a vehicle
+ */
+function getFuelHistory(vehicleId, limit = 10) {
+    return db.prepare(`
+        SELECT * FROM fuel_logs 
+        WHERE vehicle_id = ? 
+        ORDER BY created_at DESC 
+        LIMIT ?
+    `).all(vehicleId, limit);
+}
+
+/**
+ * Get fuel efficiency statistics by brand
+ */
+function getFuelEfficiencyStats(vehicleId) {
+    // Get stats grouped by brand
+    const byBrand = db.prepare(`
+        SELECT 
+            fuel_brand,
+            COUNT(*) as fill_count,
+            SUM(liters) as total_liters,
+            AVG(km_per_liter) as avg_km_per_liter
+        FROM fuel_logs 
+        WHERE vehicle_id = ? AND km_per_liter IS NOT NULL
+        GROUP BY fuel_brand
+        ORDER BY avg_km_per_liter DESC
+    `).all(vehicleId);
+
+    // Get overall average
+    const overall = db.prepare(`
+        SELECT 
+            COUNT(*) as fill_count,
+            SUM(liters) as total_liters,
+            AVG(km_per_liter) as avg_km_per_liter
+        FROM fuel_logs 
+        WHERE vehicle_id = ? AND km_per_liter IS NOT NULL
+    `).get(vehicleId);
+
+    return {
+        byBrand,
+        overall
+    };
+}
+
 module.exports = {
     db,
     initDb,
@@ -584,6 +674,11 @@ module.exports = {
     logService,
     getServiceHistory,
     getLatestServiceForType,
+    // Fuel Logs
+    addFuelLog,
+    getFuelHistory,
+    getFuelEfficiencyStats,
+    getLastFuelLog,
     // Admin
     addAllowedUser,
     removeAllowedUser,
@@ -596,4 +691,5 @@ module.exports = {
     getAdmins,
     getAdminStats
 };
+
 
