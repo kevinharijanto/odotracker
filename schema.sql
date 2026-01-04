@@ -66,3 +66,26 @@ CREATE INDEX IF NOT EXISTS idx_service_types_vehicle ON service_types(vehicle_id
 CREATE INDEX IF NOT EXISTS idx_readings_vehicle ON odometer_readings(vehicle_id);
 CREATE INDEX IF NOT EXISTS idx_services_vehicle ON service_events(vehicle_id);
 CREATE INDEX IF NOT EXISTS idx_users_telegram ON users(telegram_id);
+
+-- Admin: Allowed users (dynamically added via admin panel)
+CREATE TABLE IF NOT EXISTS allowed_users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    telegram_id TEXT NOT NULL UNIQUE,
+    notes TEXT,
+    added_by TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Admin: Access requests (logged when unauthorized users try to access)
+CREATE TABLE IF NOT EXISTS access_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    telegram_id TEXT NOT NULL UNIQUE,
+    username TEXT,
+    first_name TEXT,
+    attempt_count INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_attempt DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_allowed_users_telegram ON allowed_users(telegram_id);
+CREATE INDEX IF NOT EXISTS idx_access_requests_telegram ON access_requests(telegram_id);

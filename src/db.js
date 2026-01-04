@@ -99,6 +99,36 @@ function initDb() {
         try { db.pragma('foreign_keys = ON'); } catch { }
     }
 
+    // Migration: Create admin tables for allowed users and access requests
+    try {
+        db.prepare(`
+            CREATE TABLE IF NOT EXISTS allowed_users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                telegram_id TEXT NOT NULL UNIQUE,
+                notes TEXT,
+                added_by TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `).run();
+
+        db.prepare(`
+            CREATE TABLE IF NOT EXISTS access_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                telegram_id TEXT NOT NULL UNIQUE,
+                username TEXT,
+                first_name TEXT,
+                attempt_count INTEGER DEFAULT 1,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                last_attempt DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `).run();
+
+        db.prepare('CREATE INDEX IF NOT EXISTS idx_allowed_users_telegram ON allowed_users(telegram_id)').run();
+        db.prepare('CREATE INDEX IF NOT EXISTS idx_access_requests_telegram ON access_requests(telegram_id)').run();
+    } catch (e) {
+        console.error('Migration error (admin tables):', e.message);
+    }
+
     console.log('✅ Database initialized');
 }
 
@@ -392,6 +422,114 @@ function getLatestServiceForType(serviceTypeId) {
     `).get(serviceTypeId);
 }
 
+// ===================== ADMIN FUNCTIONS =====================
+
+/**
+ * Add a user to the allowed list
+ */
+function addAllowedUser(telegramId, notes = null, addedBy = null) {
+    const existing = db.prepare('SELECT * FROM allowed_users WHERE telegram_id = ?').get(telegramId);
+    if (existing) {
+        throw new Error('User already in allowed list');
+    }
+    const stmt = db.prepare(`
+        INSERT INTO allowed_users (telegram_id, notes, added_by)
+        VALUES (?, ?, ?)
+    `);
+    return stmt.run(telegramId, notes, addedBy);
+}
+
+/**
+ * Remove a user from the allowed list
+ */
+function removeAllowedUser(telegramId) {
+    return db.prepare('DELETE FROM allowed_users WHERE telegram_id = ?').run(telegramId);
+}
+
+/**
+ * Get all allowed users
+ */
+function getAllowedUsers() {
+    return db.prepare('SELECT * FROM allowed_users ORDER BY created_at DESC').all();
+}
+
+/**
+ * Check if a user is allowed
+ */
+function isUserAllowed(telegramId) {
+    const user = db.prepare('SELECT * FROM allowed_users WHERE telegram_id = ?').get(telegramId);
+    return !!user;
+}
+
+/**
+ * Log an access request from an unauthorized user
+ */
+function logAccessRequest(telegramId, username, firstName) {
+    const existing = db.prepare('SELECT * FROM access_requests WHERE telegram_id = ?').get(telegramId);
+
+    if (existing) {
+        // Update attempt count and last attempt time
+        db.prepare(`
+            UPDATE access_requests 
+            SET attempt_count = attempt_count + 1, 
+                last_attempt = CURRENT_TIMESTAMP,
+                username = COALESCE(?, username),
+                first_name = COALESCE(?, first_name)
+            WHERE telegram_id = ?
+        `).run(username, firstName, telegramId);
+    } else {
+        db.prepare(`
+            INSERT INTO access_requests (telegram_id, username, first_name)
+            VALUES (?, ?, ?)
+        `).run(telegramId, username, firstName);
+    }
+}
+
+/**
+ * Get all access requests
+ */
+function getAccessRequests() {
+    return db.prepare('SELECT * FROM access_requests ORDER BY last_attempt DESC').all();
+}
+
+/**
+ * Remove an access request
+ */
+function removeAccessRequest(telegramId) {
+    return db.prepare('DELETE FROM access_requests WHERE telegram_id = ?').run(telegramId);
+}
+
+/**
+ * Clear all access requests
+ */
+function clearAccessRequests() {
+    return db.prepare('DELETE FROM access_requests').run();
+}
+
+/**
+ * Get admins from database (for future use - currently uses env var)
+ */
+function getAdmins() {
+    // Could expand this to have a dedicated admins table
+    // For now, just return empty - admins are defined via ADMIN_USER_IDS env var
+    return [];
+}
+
+/**
+ * Get admin stats
+ */
+function getAdminStats() {
+    const allowedUsers = db.prepare('SELECT COUNT(*) as count FROM allowed_users').get().count;
+    const pendingRequests = db.prepare('SELECT COUNT(*) as count FROM access_requests').get().count;
+    const totalUsers = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
+
+    return {
+        allowedUsers,
+        pendingRequests,
+        totalUsers
+    };
+}
+
 module.exports = {
     db,
     initDb,
@@ -423,5 +561,17 @@ module.exports = {
     // Service Events
     logService,
     getServiceHistory,
-    getLatestServiceForType
+    getLatestServiceForType,
+    // Admin
+    addAllowedUser,
+    removeAllowedUser,
+    getAllowedUsers,
+    isUserAllowed,
+    logAccessRequest,
+    getAccessRequests,
+    removeAccessRequest,
+    clearAccessRequests,
+    getAdmins,
+    getAdminStats
 };
+

@@ -11,6 +11,7 @@ const { registerOdometerHandlers, handleOdometerTextInput } = require('./handler
 const { registerServiceHandlers, handleServiceTextInput } = require('./handlers/serviceHandlers');
 const { registerStatusHandlers, handleStatusTextInput } = require('./handlers/statusHandlers');
 const { registerReminderHandlers } = require('./handlers/reminderHandlers');
+const { registerAdminHandlers, handleAdminTextInput, logAccessRequest, registerQuickAddHandler, isAdmin } = require('./handlers/adminHandlers');
 
 // Validate environment
 if (!process.env.TELEGRAM_BOT_TOKEN) {
@@ -31,22 +32,42 @@ bot.use((ctx, next) => {
 });
 
 // Optional: Restrict to allowed users (family members)
-if (process.env.ALLOWED_USER_IDS) {
-    const allowedIds = process.env.ALLOWED_USER_IDS.split(',').map(id => id.trim());
+// Now also checks database for dynamically added users
+const envAllowedIds = process.env.ALLOWED_USER_IDS ?
+    process.env.ALLOWED_USER_IDS.split(',').map(id => id.trim()) : [];
 
-    bot.use((ctx, next) => {
-        const userId = ctx.from?.id?.toString();
-        if (userId && !allowedIds.includes(userId)) {
-            console.log(`⛔ Unauthorized access attempt from ${userId}`);
-            return ctx.reply('Sorry, this bot is private. Contact the owner for access.');
-        }
+bot.use((ctx, next) => {
+    const userId = ctx.from?.id?.toString();
+
+    if (!userId) return next();
+
+    // Always allow admins
+    if (isAdmin(userId)) {
         return next();
-    });
+    }
 
-    console.log(`🔒 Bot restricted to ${allowedIds.length} user(s)`);
-}
+    // Check env-based allowed list
+    if (envAllowedIds.includes(userId)) {
+        return next();
+    }
+
+    // Check database-based allowed list
+    if (db.isUserAllowed(userId)) {
+        return next();
+    }
+
+    // Log this access attempt for admin review
+    logAccessRequest(userId, ctx.from?.username, ctx.from?.first_name);
+
+    console.log(`⛔ Unauthorized access attempt from ${userId} (@${ctx.from?.username || 'no_username'})`);
+    return ctx.reply('Sorry, this bot is private. Contact the owner for access.');
+});
+
+console.log(`🔒 Bot access restricted (${envAllowedIds.length} user(s) in env + database)`);
 
 // Register all command handlers
+registerAdminHandlers(bot);
+registerQuickAddHandler(bot);
 registerStatusHandlers(bot);
 registerVehicleHandlers(bot);
 registerOdometerHandlers(bot);
@@ -67,7 +88,8 @@ bot.on('text', async (ctx) => {
 
     const session = ctx.session || {};
 
-    // Try each handler in order
+    // Try each handler in order (admin first for secret input)
+    if (await handleAdminTextInput(ctx, session)) return;
     if (await handleVehicleTextInput(ctx, session)) return;
     if (await handleOdometerTextInput(ctx, session)) return;
     if (await handleServiceTextInput(ctx, session)) return;
