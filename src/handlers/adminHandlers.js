@@ -9,6 +9,15 @@ const db = require('../db');
 const ADMIN_SECRET = process.env.ADMIN_SECRET || 'odotracker_admin_2024';
 
 /**
+ * Escape special Markdown characters for Telegram
+ * Characters that need escaping: _*[]()~`>#+=|{}.!-
+ */
+function escapeMarkdown(text) {
+    if (!text) return '';
+    return text.replace(/([_*\[\]()~`>#+=|{}.!\\-])/g, '\\$1');
+}
+
+/**
  * Register admin command handlers
  */
 function registerAdminHandlers(bot) {
@@ -239,9 +248,12 @@ async function showAccessRequests(ctx) {
 
     for (const req of requests) {
         const date = new Date(req.created_at).toLocaleString();
+        const firstName = escapeMarkdown(req.first_name) || 'Unknown';
+        const username = req.username ? escapeMarkdown(req.username) : null;
+
         message += `🆔 \`${req.telegram_id}\`\n`;
-        message += `👤 ${req.first_name || 'Unknown'}`;
-        if (req.username) message += ` (@${req.username})`;
+        message += `👤 ${firstName}`;
+        if (username) message += ` (@${username})`;
         message += `\n📅 ${date}\n`;
         message += `📊 Attempts: ${req.attempt_count}\n\n`;
     }
