@@ -466,12 +466,14 @@ function registerStatusHandlers(bot) {
             `*User:* ${user.first_name || user.username || 'Unknown'}\n` +
             `*Telegram ID:* \`${user.telegram_id}\`\n\n` +
             `*Vehicles:* ${vehicles.length}\n` +
-            `*Reminder:* ${user.reminder_time || '20:00'} (${user.reminder_enabled ? 'On' : 'Off'})`,
+            `*Reminder:* ${user.reminder_time || '20:00'} (${user.reminder_enabled ? 'On' : 'Off'})\n` +
+            `*Timezone:* ${user.timezone || 'Asia/Jakarta'}`,
             {
                 parse_mode: 'Markdown',
                 ...Markup.inlineKeyboard([
                     [Markup.button.callback('✏️ Edit Vehicles', 'menu_edit_vehicles')],
                     [Markup.button.callback('⏰ Reminders', 'menu_reminders')],
+                    [Markup.button.callback('🌍 Set Timezone', 'settings_timezone')],
                     [Markup.button.callback('« Back to Menu', 'back_to_menu')]
                 ])
             }
@@ -644,6 +646,76 @@ function registerStatusHandlers(bot) {
         await ctx.answerCbQuery('Disabled!');
     });
 
+    // Timezone selection
+    bot.action('settings_timezone', async (ctx) => {
+        await ctx.answerCbQuery();
+
+        const commonTimezones = [
+            { label: '🇮🇩 Jakarta (WIB)', value: 'Asia/Jakarta' },
+            { label: '🇮🇩 Makassar (WITA)', value: 'Asia/Makassar' },
+            { label: '🇮🇩 Jayapura (WIT)', value: 'Asia/Jayapura' },
+            { label: '🇸🇬 Singapore', value: 'Asia/Singapore' },
+            { label: '🇲🇾 Kuala Lumpur', value: 'Asia/Kuala_Lumpur' },
+            { label: '🇹🇭 Bangkok', value: 'Asia/Bangkok' },
+            { label: '🇯🇵 Tokyo', value: 'Asia/Tokyo' },
+            { label: '🇦🇺 Sydney', value: 'Australia/Sydney' },
+            { label: '🇬🇧 London', value: 'Europe/London' },
+            { label: '🇺🇸 New York', value: 'America/New_York' },
+        ];
+
+        const buttons = commonTimezones.map(tz => [
+            Markup.button.callback(tz.label, `set_tz_${tz.value}`)
+        ]);
+        buttons.push([Markup.button.callback('✏️ Enter Custom', 'tz_custom')]);
+        buttons.push([Markup.button.callback('« Back to Settings', 'menu_settings')]);
+
+        await ctx.editMessageText(
+            `🌍 *Set Your Timezone*\n\n` +
+            `Select your timezone for accurate reminders:`,
+            {
+                parse_mode: 'Markdown',
+                ...Markup.inlineKeyboard(buttons)
+            }
+        );
+    });
+
+    // Handle timezone selection
+    bot.action(/^set_tz_(.+)$/, async (ctx) => {
+        const timezone = ctx.match[1];
+        const user = db.getOrCreateUser(
+            ctx.from.id.toString(),
+            ctx.from.username,
+            ctx.from.first_name
+        );
+
+        db.updateUserTimezone(user.id, timezone);
+
+        await ctx.editMessageText(
+            `✅ Timezone set to *${timezone}*!\n\n` +
+            `Your reminders will now be based on this timezone.`,
+            {
+                parse_mode: 'Markdown',
+                ...Markup.inlineKeyboard([[Markup.button.callback('« Back to Settings', 'menu_settings')]])
+            }
+        );
+        await ctx.answerCbQuery('Timezone updated!');
+    });
+
+    // Custom timezone input
+    bot.action('tz_custom', async (ctx) => {
+        ctx.session = ctx.session || {};
+        ctx.session.settingTimezone = true;
+
+        await ctx.editMessageText(
+            `🌍 *Enter Custom Timezone*\n\n` +
+            `Enter a valid IANA timezone name:\n\n` +
+            `_Examples: Asia/Jakarta, America/Los_Angeles, Europe/Paris_\n\n` +
+            `📋 [Full list](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)`,
+            { parse_mode: 'Markdown', disable_web_page_preview: true }
+        );
+        await ctx.answerCbQuery();
+    });
+
     // /settings - View settings
     bot.command('settings', async (ctx) => {
         const user = db.getOrCreateUser(
@@ -661,12 +733,14 @@ function registerStatusHandlers(bot) {
             `*Daily Reminder:*\n` +
             `├ Time: ${user.reminder_time || '20:00'}\n` +
             `└ Status: ${user.reminder_enabled ? '✅ Enabled' : '❌ Disabled'}\n\n` +
+            `*Timezone:* ${user.timezone || 'Asia/Jakarta'}\n\n` +
             `*Vehicles:* ${vehicles.length}`,
             {
                 parse_mode: 'Markdown',
                 ...Markup.inlineKeyboard([
                     [Markup.button.callback('✏️ Edit Vehicles', 'menu_edit_vehicles')],
                     [Markup.button.callback('⏰ Reminders', 'menu_reminders')],
+                    [Markup.button.callback('🌍 Set Timezone', 'settings_timezone')],
                     [Markup.button.callback('« Back to Menu', 'back_to_menu')]
                 ])
             }
@@ -680,6 +754,9 @@ function registerStatusHandlers(bot) {
 function handleStatusTextInput(ctx, session) {
     if (session.settingReminder) {
         return handleReminderTimeInput(ctx, session);
+    }
+    if (session.settingTimezone) {
+        return handleTimezoneInput(ctx, session);
     }
     return false;
 }
@@ -718,6 +795,41 @@ async function handleReminderTimeInput(ctx, session) {
         {
             parse_mode: 'Markdown',
             ...Markup.inlineKeyboard([[Markup.button.callback('« Back to Menu', 'back_to_menu')]])
+        }
+    );
+    return true;
+}
+
+async function handleTimezoneInput(ctx, session) {
+    const timezone = ctx.message.text.trim();
+
+    // Validate timezone by trying to format a date with it
+    try {
+        new Intl.DateTimeFormat('en-GB', { timeZone: timezone });
+    } catch (e) {
+        await ctx.reply(
+            `❌ Invalid timezone: "${timezone}"\n\n` +
+            `Please enter a valid IANA timezone name like:\n` +
+            `• Asia/Jakarta\n• America/New_York\n• Europe/London`,
+            { parse_mode: 'Markdown' }
+        );
+        return true;
+    }
+
+    const user = db.getOrCreateUser(
+        ctx.from.id.toString(),
+        ctx.from.username,
+        ctx.from.first_name
+    );
+
+    db.updateUserTimezone(user.id, timezone);
+    delete session.settingTimezone;
+
+    await ctx.reply(
+        `✅ Timezone set to *${timezone}*!\n\nYour reminders will now be based on this timezone.`,
+        {
+            parse_mode: 'Markdown',
+            ...Markup.inlineKeyboard([[Markup.button.callback('« Back to Settings', 'menu_settings')]])
         }
     );
     return true;

@@ -99,6 +99,20 @@ function initDb() {
         try { db.pragma('foreign_keys = ON'); } catch { }
     }
 
+    // Migration: Add timezone column to users table
+    try {
+        const userInfo = db.prepare("PRAGMA table_info(users)").all();
+        const hasTimezone = userInfo.some(col => col.name === 'timezone');
+
+        if (!hasTimezone) {
+            console.log('🔄 Migrating: Adding timezone column to users table...');
+            db.prepare("ALTER TABLE users ADD COLUMN timezone TEXT DEFAULT 'Asia/Jakarta'").run();
+            console.log('✅ Migration complete: timezone column added');
+        }
+    } catch (e) {
+        console.error('Migration error (timezone):', e.message);
+    }
+
     // Migration: Create admin tables for allowed users and access requests
     try {
         db.prepare(`
@@ -152,6 +166,13 @@ function updateUserReminder(userId, reminderTime, enabled = true) {
         UPDATE users SET reminder_time = ?, reminder_enabled = ?
         WHERE id = ?
     `).run(reminderTime, enabled ? 1 : 0, userId);
+}
+
+function updateUserTimezone(userId, timezone) {
+    db.prepare(`
+        UPDATE users SET timezone = ?
+        WHERE id = ?
+    `).run(timezone, userId);
 }
 
 function getUsersWithReminders() {
@@ -536,6 +557,7 @@ module.exports = {
     // Users
     getOrCreateUser,
     updateUserReminder,
+    updateUserTimezone,
     getUsersWithReminders,
     getUserById,
     // Vehicles

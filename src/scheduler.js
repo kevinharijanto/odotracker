@@ -29,15 +29,37 @@ function stopScheduler() {
  * Check if any users need to be reminded
  */
 async function checkReminders() {
-    const now = new Date();
-    const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-
     const users = db.getUsersWithReminders();
 
     for (const user of users) {
+        // Get current time in user's timezone
+        const userTimezone = user.timezone || 'Asia/Jakarta';
+        const currentTime = getCurrentTimeInTimezone(userTimezone);
+
         if (user.reminder_time === currentTime) {
             await sendDailyReminder(user);
         }
+    }
+}
+
+/**
+ * Get current time (HH:MM) in a specific timezone
+ */
+function getCurrentTimeInTimezone(timezone) {
+    try {
+        const now = new Date();
+        const formatter = new Intl.DateTimeFormat('en-GB', {
+            timeZone: timezone,
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        });
+        return formatter.format(now);
+    } catch (e) {
+        // Fallback to UTC if invalid timezone
+        console.error(`Invalid timezone: ${timezone}, falling back to UTC`);
+        const now = new Date();
+        return `${now.getUTCHours().toString().padStart(2, '0')}:${now.getUTCMinutes().toString().padStart(2, '0')}`;
     }
 }
 

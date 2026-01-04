@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
     first_name TEXT,
     reminder_time TEXT DEFAULT '20:00',
     reminder_enabled INTEGER DEFAULT 1,
+    timezone TEXT DEFAULT 'Asia/Jakarta',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
