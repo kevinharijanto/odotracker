@@ -92,8 +92,8 @@ function registerFuelHandlers(bot) {
 
         await ctx.editMessageText(
             `⛽ *Fuel Log*\n\n` +
-            `📍 ${session.odoKm.toLocaleString()} km\n` +
-            `⛽ ${session.liters} L at ${brand}\n\n` +
+            `📍 ${escapeMarkdown(session.odoKm.toLocaleString())} km\n` +
+            `⛽ ${escapeMarkdown(session.liters.toString())} L at ${escapeMarkdown(brand)}\n\n` +
             `💰 How much did you pay? \\(Rupiah\\)\n\n` +
             `Reply with the total cost or /skip to skip`,
             { parse_mode: 'MarkdownV2' }
@@ -220,7 +220,7 @@ async function showFuelHistory(ctx, vehicle) {
         const cost = log.cost ? `Rp ${log.cost.toLocaleString('id-ID')}` : '';
 
         message += `📅 ${escapeMarkdown(date)}\n`;
-        message += `   ${log.liters}L ${escapeMarkdown(log.fuel_brand)} @ ${log.odo_km.toLocaleString()} km\n`;
+        message += `   ${escapeMarkdown(log.liters.toString())}L ${escapeMarkdown(log.fuel_brand)} @ ${escapeMarkdown(log.odo_km.toLocaleString())} km\n`;
         message += `   📊 ${escapeMarkdown(efficiency)}`;
         if (cost) message += ` \\| 💰 ${escapeMarkdown(cost)}`;
         message += `\n\n`;
@@ -251,7 +251,7 @@ async function showFuelStats(ctx, vehicle) {
         : 'N/A';
 
     let message = `📊 *Fuel Stats* \\- ${icon} ${escapeMarkdown(vehicle.name)}\n\n`;
-    message += `*Overall:* ${overallAvg} km/L \\(${stats.overall.fill_count} fills\\)\n\n`;
+    message += `*Overall:* ${escapeMarkdown(overallAvg)} km/L \\(${stats.overall.fill_count} fills\\)\n\n`;
 
     if (stats.byBrand.length > 0) {
         message += `*By Station:*\n`;
@@ -274,7 +274,7 @@ async function showFuelStats(ctx, vehicle) {
             const avg = brand.avg_km_per_liter ? brand.avg_km_per_liter.toFixed(1) : 'N/A';
             const isBest = brand.fuel_brand === bestBrand.fuel_brand && stats.byBrand.length > 1;
 
-            message += `${brandIcon} ${escapeMarkdown(brand.fuel_brand)}: ${avg} km/L \\(${brand.fill_count} fills\\)`;
+            message += `${brandIcon} ${escapeMarkdown(brand.fuel_brand)}: ${escapeMarkdown(avg)} km/L \\(${brand.fill_count} fills\\)`;
             if (isBest) message += ` ⭐ Best`;
             message += `\n`;
         }
@@ -422,19 +422,19 @@ async function saveFuelLog(ctx, session, cost) {
         const icon = vehicle.vehicle_type === 'motorcycle' ? '🏍️' : '🚗';
         let message = `✅ *Fuel log saved\\!*\n\n`;
         message += `${icon} ${escapeMarkdown(vehicle.name)}\n`;
-        message += `⛽ ${session.liters}L at ${escapeMarkdown(session.brand)}\n`;
-        message += `📍 ${session.odoKm.toLocaleString()} km\n`;
+        message += `⛽ ${escapeMarkdown(session.liters.toString())}L at ${escapeMarkdown(session.brand)}\n`;
+        message += `📍 ${escapeMarkdown(session.odoKm.toLocaleString())} km\n`;
 
         if (cost) {
             const pricePerLiter = Math.round(cost / session.liters);
-            message += `💰 Rp ${cost.toLocaleString('id-ID')} \\(Rp ${pricePerLiter.toLocaleString('id-ID')}/L\\)\n`;
+            message += `💰 Rp ${escapeMarkdown(cost.toLocaleString('id-ID'))} \\(Rp ${escapeMarkdown(pricePerLiter.toLocaleString('id-ID'))}/L\\)\n`;
         }
 
         message += `\n`;
 
         // Show efficiency
         if (result.kmPerLiter) {
-            message += `📊 *This fill:* ${result.kmPerLiter} km/L\n`;
+            message += `📊 *This fill:* ${escapeMarkdown(result.kmPerLiter.toString())} km/L\n`;
         } else {
             message += `📊 _Efficiency will be calculated on next refuel_\n`;
         }
@@ -444,11 +444,11 @@ async function saveFuelLog(ctx, session, cost) {
         const brandStats = stats.byBrand.find(b => b.fuel_brand === session.brand);
 
         if (brandStats && brandStats.fill_count > 1) {
-            message += `📈 *Avg \\(${escapeMarkdown(session.brand)}\\):* ${brandStats.avg_km_per_liter.toFixed(1)} km/L\n`;
+            message += `📈 *Avg \\(${escapeMarkdown(session.brand)}\\):* ${escapeMarkdown(brandStats.avg_km_per_liter.toFixed(1))} km/L\n`;
         }
 
         if (stats.overall && stats.overall.fill_count > 1) {
-            message += `📈 *Avg \\(All\\):* ${stats.overall.avg_km_per_liter.toFixed(1)} km/L`;
+            message += `📈 *Avg \\(All\\):* ${escapeMarkdown(stats.overall.avg_km_per_liter.toFixed(1))} km/L`;
         }
 
         delete ctx.session.fuelLog;
