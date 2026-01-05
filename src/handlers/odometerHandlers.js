@@ -486,55 +486,58 @@ async function handleEditOdometerInput(ctx, session) {
 }
 
 async function handleManualOdometerInput(ctx, session) {
-    const { vehicleId, confirmLower } = session.loggingOdometer;
+    const { vehicleId } = session.loggingOdometer;
+    const vehicle = db.getVehicleById(vehicleId);
+    const text = ctx.message.text.trim();
 
-    const value = parseInt(ctx.message.text.replace(/[^\d]/g, ''));
+    // Handle "yes" confirmation for lower value FIRST (before trying to parse as number)
+    if (session.loggingOdometer.awaitingConfirm) {
+        const lowerText = text.toLowerCase();
+        if (lowerText === 'yes' || lowerText === 'y') {
+            // Use the pending value
+            session.loggingOdometer.awaitingConfirm = false;
+            return await saveManualOdometer(ctx, session, session.loggingOdometer.pendingValue);
+        }
+    }
+
+    // Parse the input - replace comma with dot (for decimal separator) then parse
+    // This handles both "28512,4" and "28512.4" formats
+    const normalizedText = text.replace(',', '.');
+    const value = Math.round(parseFloat(normalizedText.replace(/[^\d.]/g, '')));
+
     if (isNaN(value) || value <= 0) {
-        await ctx.reply('Please enter a valid number (e.g., 45000)');
+        if (session.loggingOdometer.awaitingConfirm) {
+            await ctx.reply('Please enter a valid number or type "yes" to confirm.');
+        } else {
+            await ctx.reply('Please enter a valid number (e.g., 45000)');
+        }
         return true;
     }
 
-    const vehicle = db.getVehicleById(vehicleId);
-
     // Check if value is lower than current and not already confirmed
-    if (value < vehicle.current_odo && !confirmLower) {
+    if (value < vehicle.current_odo && !session.loggingOdometer.confirmLower) {
         session.loggingOdometer.pendingValue = value;
         session.loggingOdometer.awaitingConfirm = true;
 
         await ctx.reply(
-            `⚠️ *Warning*\\n\\n` +
-            `${value.toLocaleString()} km is *lower* than current reading (${vehicle.current_odo.toLocaleString()} km).\\n\\n` +
+            `⚠️ *Warning*\n\n` +
+            `${value.toLocaleString()} km is *lower* than current reading (${vehicle.current_odo.toLocaleString()} km).\n\n` +
             `Wrong input? Type the correct value, or type "yes" to save anyway.`,
             { parse_mode: 'Markdown' }
         );
         return true;
     }
 
-    // Handle "yes" confirmation for lower value
+    // If we were awaiting confirm but got a valid new number, check if it's also lower
     if (session.loggingOdometer.awaitingConfirm) {
-        const text = ctx.message.text.toLowerCase().trim();
-        if (text === 'yes' || text === 'y') {
-            // Use the pending value
-            session.loggingOdometer.awaitingConfirm = false;
-            return await saveManualOdometer(ctx, session, session.loggingOdometer.pendingValue);
-        } else {
-            // Try parsing as a new number
-            const newValue = parseInt(text.replace(/[^\d]/g, ''));
-            if (!isNaN(newValue) && newValue > 0) {
-                session.loggingOdometer.awaitingConfirm = false;
-                // Recursively validate the new value
-                if (newValue < vehicle.current_odo) {
-                    session.loggingOdometer.pendingValue = newValue;
-                    session.loggingOdometer.awaitingConfirm = true;
-                    await ctx.reply(
-                        `⚠️ ${newValue.toLocaleString()} km is still lower than current (${vehicle.current_odo.toLocaleString()} km).\\n\\nType "yes" to save anyway, or enter a different value.`,
-                        { parse_mode: 'Markdown' }
-                    );
-                    return true;
-                }
-                return await saveManualOdometer(ctx, session, newValue);
-            }
-            await ctx.reply('Please enter a valid number or type "yes" to confirm.');
+        session.loggingOdometer.awaitingConfirm = false;
+        if (value < vehicle.current_odo) {
+            session.loggingOdometer.pendingValue = value;
+            session.loggingOdometer.awaitingConfirm = true;
+            await ctx.reply(
+                `⚠️ ${value.toLocaleString()} km is still lower than current (${vehicle.current_odo.toLocaleString()} km).\n\nType "yes" to save anyway, or enter a different value.`,
+                { parse_mode: 'Markdown' }
+            );
             return true;
         }
     }
