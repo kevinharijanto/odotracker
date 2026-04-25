@@ -109,8 +109,15 @@ function initDb() {
             db.prepare("ALTER TABLE users ADD COLUMN timezone TEXT DEFAULT 'Asia/Jakarta'").run();
             console.log('✅ Migration complete: timezone column added');
         }
+
+        const hasBpStockNotify = userInfo.some(col => col.name === 'bp_stock_notify');
+        if (!hasBpStockNotify) {
+            console.log('🔄 Migrating: Adding bp_stock_notify column to users table...');
+            db.prepare("ALTER TABLE users ADD COLUMN bp_stock_notify INTEGER DEFAULT 0").run();
+            console.log('✅ Migration complete: bp_stock_notify column added');
+        }
     } catch (e) {
-        console.error('Migration error (timezone):', e.message);
+        console.error('Migration error (timezone/bp_stock_notify):', e.message);
     }
 
     // Migration: Create admin tables for allowed users and access requests
@@ -177,6 +184,17 @@ function updateUserTimezone(userId, timezone) {
 
 function getUsersWithReminders() {
     return db.prepare('SELECT * FROM users WHERE reminder_enabled = 1').all();
+}
+
+function getUsersWithBpStockNotify() {
+    return db.prepare('SELECT * FROM users WHERE bp_stock_notify = 1').all();
+}
+
+function setBpStockNotify(userId, enabled = true) {
+    db.prepare(`
+        UPDATE users SET bp_stock_notify = ?
+        WHERE id = ?
+    `).run(enabled ? 1 : 0, userId);
 }
 
 function getUserById(userId) {
@@ -649,6 +667,8 @@ module.exports = {
     updateUserReminder,
     updateUserTimezone,
     getUsersWithReminders,
+    getUsersWithBpStockNotify,
+    setBpStockNotify,
     getUserById,
     // Vehicles
     addVehicle,

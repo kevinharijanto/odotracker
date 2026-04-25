@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
     reminder_time TEXT DEFAULT '20:00',
     reminder_enabled INTEGER DEFAULT 1,
     timezone TEXT DEFAULT 'Asia/Jakarta',
+    bp_stock_notify INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

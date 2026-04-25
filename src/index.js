@@ -13,6 +13,7 @@ const { registerStatusHandlers, handleStatusTextInput } = require('./handlers/st
 const { registerReminderHandlers } = require('./handlers/reminderHandlers');
 const { registerFuelHandlers, handleFuelTextInput } = require('./handlers/fuelHandlers');
 const { registerAdminHandlers, handleAdminTextInput, logAccessRequest, registerQuickAddHandler, isAdmin } = require('./handlers/adminHandlers');
+const { registerBpStockHandlers } = require('./handlers/bpStockHandlers');
 
 // Validate environment
 if (!process.env.TELEGRAM_BOT_TOKEN) {
@@ -75,6 +76,7 @@ registerOdometerHandlers(bot);
 registerServiceHandlers(bot);
 registerReminderHandlers(bot);
 registerFuelHandlers(bot);
+registerBpStockHandlers(bot);
 
 // Handle text messages (for multi-step inputs)
 bot.on('text', async (ctx) => {
@@ -154,6 +156,7 @@ async function main() {
         { command: 'status', description: '📊 Vehicle status' },
         { command: 'history', description: '📜 Odometer history' },
         { command: 'servicehistory', description: '🔧 Service history' },
+        { command: 'bpstock', description: '⛽ Check BP JGC Stock' },
         { command: 'settings', description: '⚙️ My settings' },
         { command: 'help', description: '❓ Help & commands' }
     ]);

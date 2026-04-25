@@ -40,6 +40,9 @@ async function checkReminders() {
             await sendDailyReminder(user);
         }
     }
+
+    // Also check for BP stock notifications
+    await checkBpStockUpdates();
 }
 
 /**
@@ -177,6 +180,51 @@ async function checkServiceAlerts(userId, vehicleId) {
         await bot.telegram.sendMessage(user.telegram_id, message, {
             parse_mode: 'Markdown'
         });
+    }
+}
+
+/**
+ * Check and send BP stock updates for subscribed users
+ */
+async function checkBpStockUpdates() {
+    if (!bot) return;
+
+    const users = db.getUsersWithBpStockNotify();
+    if (users.length === 0) return;
+
+    // Check if current time is 08:00 for at least one user before scraping
+    let shouldScrape = false;
+    const usersToNotify = [];
+
+    for (const user of users) {
+        const userTimezone = user.timezone || 'Asia/Jakarta';
+        const currentTime = getCurrentTimeInTimezone(userTimezone);
+
+        if (currentTime === '08:00') {
+            shouldScrape = true;
+            usersToNotify.push(user);
+        }
+    }
+
+    if (!shouldScrape) return;
+
+    try {
+        const { scrapeBPStockJGC, formatBPStockMessage } = require('./bpStockScraper');
+        const data = await scrapeBPStockJGC();
+        const message = formatBPStockMessage(data);
+
+        for (const user of usersToNotify) {
+            try {
+                await bot.telegram.sendMessage(user.telegram_id, message, {
+                    parse_mode: 'Markdown'
+                });
+                console.log(`📨 BP Stock update sent to ${user.first_name || user.telegram_id}`);
+            } catch (userErr) {
+                console.error(`Failed to send BP Stock to ${user.telegram_id}:`, userErr.message);
+            }
+        }
+    } catch (error) {
+        console.error('Failed to run scheduled BP stock update:', error.message);
     }
 }
 
